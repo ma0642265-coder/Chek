@@ -1,0 +1,1138 @@
+<!DOCTYPE html>
+<html lang="bn">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>Nexus Messenger & Call</title>
+
+  <!-- Tailwind CSS & FontAwesome -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+  <!-- Firebase SDKs -->
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
+
+  <style>
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    html, body {
+      height: 100%;
+      height: 100dvh;
+      width: 100%;
+      margin: 0;
+      padding: 0;
+      overflow: hidden;
+      position: fixed;
+    }
+    ::-webkit-scrollbar { width: 3px; }
+    ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+    .chat-bg {
+      background-color: #efeae2;
+      background-image: radial-gradient(#d1d7db 1.2px, transparent 1.2px);
+      background-size: 16px 16px;
+    }
+    .tick-blue { color: #3b82f6; font-weight: bold; }
+    .tick-gray { color: #9ca3af; }
+  </style>
+</head>
+<body class="bg-gray-100 font-sans select-none flex flex-col h-full w-full">
+
+  <!-- ================= 1. AUTH SCREEN ================= -->
+  <div id="authScreen" class="flex flex-col items-center justify-center h-full w-full bg-slate-100 p-4 z-50 overflow-y-auto">
+    <div class="max-w-md w-full bg-white rounded-2xl shadow-2xl p-6 border border-gray-100">
+      <div class="text-center mb-5">
+        <h1 class="text-3xl sm:text-4xl font-black text-blue-600 tracking-tight">facebook <span class="text-green-500 text-xl sm:text-2xl font-bold">chat</span></h1>
+        <p class="text-gray-500 text-xs mt-1">হাই-সিকিউরিটি এনক্রিপ্টেড চ্যাট ও কলিং</p>
+      </div>
+
+      <!-- Auth Switcher -->
+      <div class="flex border-b border-gray-200 mb-4 text-sm font-semibold">
+        <button id="tabBtnLogin" onclick="setAuthTab('login')" class="w-1/2 pb-3 text-blue-600 border-b-2 border-blue-600">লগইন</button>
+        <button id="tabBtnRegister" onclick="setAuthTab('register')" class="w-1/2 pb-3 text-gray-500">নতুন অ্যাকাউন্ট</button>
+      </div>
+
+      <div id="authAlert" class="hidden mb-3 p-2.5 rounded-lg text-xs font-medium"></div>
+
+      <!-- Login Form -->
+      <form id="loginForm" onsubmit="event.preventDefault(); handleLogin();" class="space-y-3.5">
+        <div>
+          <label class="block text-[11px] font-bold text-gray-600 uppercase mb-1">ইউজারনেম / ইমেইল / ফোন</label>
+          <input type="text" id="loginId" required class="w-full px-3.5 py-2.5 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-sm" placeholder="লিখুন...">
+        </div>
+        <div>
+          <label class="block text-[11px] font-bold text-gray-600 uppercase mb-1">পাসওয়ার্ড</label>
+          <input type="password" id="loginPass" required class="w-full px-3.5 py-2.5 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-sm" placeholder="পাসওয়ার্ড">
+        </div>
+        <button type="submit" id="loginSubmitBtn" class="w-full py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg transition shadow text-sm">লগইন করুন</button>
+      </form>
+
+      <!-- Register Form -->
+      <form id="registerForm" onsubmit="event.preventDefault(); handleRegister();" class="space-y-2.5 hidden">
+        <div class="flex gap-2">
+          <input type="text" id="regFirst" required placeholder="First Name" class="w-1/2 p-2 border rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-sm">
+          <input type="text" id="regLast" required placeholder="Last Name" class="w-1/2 p-2 border rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-sm">
+        </div>
+        <input type="text" id="regUser" required placeholder="ইউনিক ইউজারনেম (e.g. sakib)" class="w-full p-2 border rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-sm">
+        <input type="text" id="regContact" required placeholder="ফোন নম্বর বা ইমেইল" class="w-full p-2 border rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-sm">
+        <input type="password" id="regPass" required placeholder="পাসওয়ার্ড" class="w-full p-2 border rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-sm">
+        <button type="submit" id="registerSubmitBtn" class="w-full py-2.5 bg-green-600 hover:bg-green-700 text-white font-bold rounded-lg transition shadow text-sm">অ্যাকাউন্ট খুলুন</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- ================= 2. MAIN APPLICATION ================= -->
+  <div id="mainApp" class="hidden flex-1 h-full w-full flex flex-col md:flex-row overflow-hidden relative">
+    
+    <!-- LEFT SIDEBAR -->
+    <div id="sidebarContainer" class="w-full md:w-80 lg:w-96 border-r border-gray-200 flex flex-col h-full bg-white z-10 flex-shrink-0">
+      
+      <!-- User Profile Header -->
+      <div class="p-3 bg-gray-50 border-b flex items-center justify-between flex-shrink-0">
+        <div class="flex items-center gap-2.5 cursor-pointer min-w-0" onclick="openProfileModal()">
+          <div class="relative flex-shrink-0">
+            <img id="myAvatarImg" src="" class="w-10 h-10 rounded-full object-cover border-2 border-blue-500">
+            <span class="absolute bottom-0 right-0 w-2.5 h-2.5 bg-green-500 border-2 border-white rounded-full"></span>
+          </div>
+          <div class="min-w-0">
+            <h3 id="myDisplayName" class="font-bold text-gray-800 text-sm leading-tight truncate"></h3>
+            <p id="myUsernameDisplay" class="text-[11px] text-gray-500 truncate"></p>
+          </div>
+        </div>
+        <div class="flex gap-1 flex-shrink-0">
+          <button onclick="openProfileModal()" title="প্রোফাইল সেটিংস" class="p-2 text-gray-500 hover:text-blue-600 rounded-full"><i class="fa-solid fa-user-pen text-sm"></i></button>
+          <button onclick="handleLogout()" title="লগআউট" class="p-2 text-gray-500 hover:text-red-600 rounded-full"><i class="fa-solid fa-right-from-bracket text-sm"></i></button>
+        </div>
+      </div>
+
+      <!-- SEARCH BAR (Find by Username or Name) -->
+      <div class="p-2 border-b bg-white flex-shrink-0">
+        <div class="relative flex items-center">
+          <i class="fa-solid fa-magnifying-glass absolute left-3 text-gray-400 text-xs"></i>
+          <input type="text" id="userSearchInput" oninput="filterUsers(this.value)" placeholder="ইউজারনেম বা নাম লিখে খুঁজুন..." class="w-full pl-8 pr-8 py-1.5 bg-gray-100 rounded-full text-xs outline-none focus:ring-2 focus:ring-blue-500">
+          <button onclick="clearSearch()" id="clearSearchBtn" class="hidden absolute right-2.5 text-gray-400 hover:text-gray-600 text-xs"><i class="fa-solid fa-circle-xmark"></i></button>
+        </div>
+      </div>
+
+      <!-- Navigation Tabs -->
+      <div class="flex border-b text-xs font-semibold text-gray-600 bg-gray-50 flex-shrink-0">
+        <button onclick="showSidebarSection('allUsers')" id="navAllUsers" class="w-1/3 py-2.5 text-blue-600 border-b-2 border-blue-600">সব ইউজার</button>
+        <button onclick="showSidebarSection('friends')" id="navFriends" class="w-1/3 py-2.5 hover:text-blue-600">বন্ধুগণ</button>
+        <button onclick="showSidebarSection('requests')" id="navRequests" class="w-1/3 py-2.5 hover:text-blue-600 relative">
+          রিকোয়েস্ট <span id="requestCountBadge" class="hidden bg-red-500 text-white rounded-full px-1.5 py-0.2 text-[10px]">0</span>
+        </button>
+      </div>
+
+      <!-- Users & Friends Lists -->
+      <div class="flex-1 overflow-y-auto min-h-0">
+        <div id="listAllUsers" class="divide-y divide-gray-100"></div>
+        <div id="listFriends" class="hidden divide-y divide-gray-100"></div>
+        <div id="listRequests" class="hidden divide-y divide-gray-100 p-2"></div>
+      </div>
+    </div>
+
+    <!-- RIGHT CHAT SECTION -->
+    <div id="chatSection" class="hidden md:flex flex-1 flex-col h-full bg-slate-100 relative min-w-0">
+      
+      <!-- Placeholder when no chat is open -->
+      <div id="noChatSelected" class="h-full flex flex-col items-center justify-center text-gray-400 p-6">
+        <i class="fa-brands fa-whatsapp text-6xl text-green-500 mb-3 opacity-60"></i>
+        <h2 class="text-lg sm:text-xl font-bold text-gray-700">মেসেজিং অ্যাপে স্বাগতম!</h2>
+        <p class="text-xs text-center max-w-xs mt-1">বাম পাশ থেকে যেকোনো ইউজারের নামের ওপর ক্লিক করে মেসেজ বা কল করুন।</p>
+      </div>
+
+      <!-- Active Chat Window -->
+      <div id="chatActiveWindow" class="hidden h-full w-full flex flex-col min-w-0">
+        
+        <!-- Header -->
+        <div class="p-2.5 bg-white border-b flex items-center justify-between shadow-sm z-10 flex-shrink-0">
+          <div class="flex items-center gap-2 min-w-0">
+            <!-- Mobile Back Button -->
+            <button onclick="backToUserList()" class="md:hidden p-1.5 text-gray-600 hover:text-blue-600 -ml-1">
+              <i class="fa-solid fa-arrow-left text-base"></i>
+            </button>
+            <div class="relative flex-shrink-0">
+              <img id="partnerAvatarImg" src="" class="w-9 h-9 rounded-full object-cover border">
+              <span id="partnerStatusDot" class="absolute bottom-0 right-0 w-2.5 h-2.5 bg-gray-400 border-2 border-white rounded-full"></span>
+            </div>
+            <div class="min-w-0">
+              <h3 id="partnerNameTitle" class="font-bold text-gray-800 text-sm leading-tight truncate"></h3>
+              <p id="partnerStatusText" class="text-[10px] text-gray-400 font-medium">অফলাইন</p>
+            </div>
+          </div>
+
+          <!-- AUDIO & VIDEO CALL BUTTONS -->
+          <div class="flex items-center gap-1.5 text-gray-600 flex-shrink-0">
+            <button onclick="initiateCall('audio')" title="অডিও কল" class="w-8 h-8 md:w-9 md:h-9 bg-green-50 text-green-600 hover:bg-green-100 rounded-full flex items-center justify-center transition">
+              <i class="fa-solid fa-phone text-xs md:text-sm"></i>
+            </button>
+            <button onclick="initiateCall('video')" title="ভিডিও কল" class="w-8 h-8 md:w-9 md:h-9 bg-blue-50 text-blue-600 hover:bg-blue-100 rounded-full flex items-center justify-center transition">
+              <i class="fa-solid fa-video text-xs md:text-sm"></i>
+            </button>
+          </div>
+        </div>
+
+        <!-- Messages Body -->
+        <div id="messagesDisplay" class="flex-1 overflow-y-auto p-3 sm:p-4 space-y-2.5 chat-bg min-h-0"></div>
+
+        <!-- Word-Based Sticker Suggestion Popup -->
+        <div id="stickerSuggestionPopup" class="hidden bg-white border border-gray-200 rounded-full shadow-lg px-3 py-1 mx-3 -mb-2 z-20 flex items-center gap-2 animate-bounce w-max">
+          <span class="text-[11px] text-gray-500 font-bold">স্টিকার:</span>
+          <div id="stickerListHolder" class="flex gap-2 text-xl cursor-pointer"></div>
+        </div>
+
+        <!-- Permanent Emoji & Sticker Drawer -->
+        <div id="emojiDrawer" class="hidden bg-white border-t border-gray-200 p-2 z-20 grid grid-cols-8 gap-2 text-xl overflow-y-auto max-h-32 flex-shrink-0">
+          <span onclick="sendTextMessage('😂')" class="cursor-pointer hover:scale-125 text-center">😂</span>
+          <span onclick="sendTextMessage('❤️')" class="cursor-pointer hover:scale-125 text-center">❤️</span>
+          <span onclick="sendTextMessage('👍')" class="cursor-pointer hover:scale-125 text-center">👍</span>
+          <span onclick="sendTextMessage('🔥')" class="cursor-pointer hover:scale-125 text-center">🔥</span>
+          <span onclick="sendTextMessage('😢')" class="cursor-pointer hover:scale-125 text-center">😢</span>
+          <span onclick="sendTextMessage('🎉')" class="cursor-pointer hover:scale-125 text-center">🎉</span>
+          <span onclick="sendTextMessage('👋')" class="cursor-pointer hover:scale-125 text-center">👋</span>
+          <span onclick="sendTextMessage('😘')" class="cursor-pointer hover:scale-125 text-center">😘</span>
+          <span onclick="sendTextMessage('😮')" class="cursor-pointer hover:scale-125 text-center">😮</span>
+          <span onclick="sendTextMessage('😡')" class="cursor-pointer hover:scale-125 text-center">😡</span>
+          <span onclick="sendTextMessage('🥳')" class="cursor-pointer hover:scale-125 text-center">🥳</span>
+          <span onclick="sendTextMessage('💯')" class="cursor-pointer hover:scale-125 text-center">💯</span>
+          <span onclick="sendTextMessage('🌹')" class="cursor-pointer hover:scale-125 text-center">🌹</span>
+          <span onclick="sendTextMessage('🙏')" class="cursor-pointer hover:scale-125 text-center">🙏</span>
+          <span onclick="sendTextMessage('😎')" class="cursor-pointer hover:scale-125 text-center">😎</span>
+          <span onclick="sendTextMessage('✨')" class="cursor-pointer hover:scale-125 text-center">✨</span>
+        </div>
+
+        <!-- Voice Recording Indicator -->
+        <div id="voiceRecordingStatus" class="hidden bg-red-100 border-t border-red-300 p-1.5 text-center text-xs text-red-600 font-bold flex items-center justify-center gap-2 flex-shrink-0">
+          <span class="w-2 h-2 bg-red-600 rounded-full animate-ping"></span> 
+          <span>ভয়েস রেকর্ড হচ্ছে... (পাঠাতে মাইক বাটনে আবার চাপুন)</span>
+        </div>
+
+        <!-- MOBILE-PERFECT FIXED INPUT BAR -->
+        <div class="p-2 bg-white border-t flex items-center gap-1.5 w-full flex-shrink-0 z-30">
+          
+          <button onclick="toggleEmojiDrawer()" title="ইমোজি" class="p-1.5 text-gray-500 hover:text-yellow-500 flex-shrink-0">
+            <i class="fa-regular fa-face-smile text-base sm:text-lg"></i>
+          </button>
+
+          <input type="file" id="cameraInput" accept="image/*" capture="environment" class="hidden" onchange="handleMediaUpload(this)">
+          <button onclick="document.getElementById('cameraInput').click()" title="ক্যামেরা" class="p-1.5 text-gray-500 hover:text-green-600 flex-shrink-0">
+            <i class="fa-solid fa-camera text-base sm:text-lg"></i>
+          </button>
+
+          <input type="file" id="galleryInput" accept="image/*" class="hidden" onchange="handleMediaUpload(this)">
+          <button onclick="document.getElementById('galleryInput').click()" title="গ্যালারি" class="p-1.5 text-gray-500 hover:text-blue-600 flex-shrink-0">
+            <i class="fa-solid fa-image text-base sm:text-lg"></i>
+          </button>
+
+          <button id="voiceRecordBtn" onclick="toggleVoiceRecording()" title="ভয়েস রেকর্ড" class="p-1.5 text-gray-500 hover:text-red-500 flex-shrink-0">
+            <i class="fa-solid fa-microphone text-base sm:text-lg"></i>
+          </button>
+
+          <!-- Input Text Field with min-w-0 to prevent layout explosion -->
+          <input type="text" id="chatTextInput" oninput="handleTypingStickers(this.value)" onkeydown="if(event.key==='Enter') sendTextMessage()" placeholder="মেসেজ লিখুন..." class="flex-1 min-w-0 py-2 px-3 bg-gray-100 rounded-full outline-none focus:ring-2 focus:ring-blue-500 text-xs sm:text-sm">
+
+          <button onclick="sendTextMessage()" class="w-8 h-8 sm:w-9 sm:h-9 bg-green-500 hover:bg-green-600 text-white rounded-full flex items-center justify-center transition shadow flex-shrink-0">
+            <i class="fa-solid fa-paper-plane text-xs"></i>
+          </button>
+        </div>
+
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ================= 3. INCOMING CALL MODAL ================= -->
+  <div id="incomingCallModal" class="hidden fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4">
+    <div class="bg-white rounded-3xl p-6 text-center max-w-xs w-full shadow-2xl animate-pulse">
+      <img id="callerAvatar" src="" class="w-20 h-20 rounded-full mx-auto mb-3 object-cover border-4 border-green-500 shadow-md">
+      <h3 id="callerName" class="font-bold text-gray-800 text-base"></h3>
+      <p id="callTypeLabel" class="text-xs text-gray-500 mb-6">আপনাকে কল দিচ্ছে...</p>
+      
+      <div class="flex justify-center gap-6">
+        <button onclick="rejectIncomingCall()" class="w-13 h-13 p-3.5 bg-red-500 hover:bg-red-600 text-white rounded-full flex items-center justify-center shadow-lg transition">
+          <i class="fa-solid fa-phone-slash text-lg"></i>
+        </button>
+        <button onclick="acceptIncomingCall()" class="w-13 h-13 p-3.5 bg-green-500 hover:bg-green-600 text-white rounded-full flex items-center justify-center shadow-lg transition">
+          <i class="fa-solid fa-phone text-lg"></i>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= 4. ACTIVE CALL OVERLAY ================= -->
+  <div id="activeCallOverlay" class="hidden fixed inset-0 bg-gray-900 z-50 flex flex-col justify-between p-3">
+    <div class="flex justify-between items-center text-white p-2">
+      <div>
+        <h4 id="callOverlayPartnerName" class="font-bold text-sm"></h4>
+        <p class="text-[11px] text-green-400">কল সংযুক্ত আছে</p>
+      </div>
+    </div>
+
+    <div class="flex-1 relative flex items-center justify-center overflow-hidden rounded-2xl bg-black my-2">
+      <video id="remoteVideo" autoplay playsinline class="w-full h-full object-contain"></video>
+      <video id="localVideo" autoplay playsinline muted class="absolute top-3 right-3 w-24 h-32 bg-gray-800 rounded-xl object-cover border-2 border-white shadow-md"></video>
+    </div>
+
+    <div class="flex justify-center items-center gap-6 py-3">
+      <button onclick="toggleAudioMute()" id="btnMuteAudio" class="w-11 h-11 bg-gray-700 text-white rounded-full flex items-center justify-center">
+        <i class="fa-solid fa-microphone text-sm"></i>
+      </button>
+      <button onclick="endActiveCall()" class="w-13 h-13 p-3 bg-red-600 text-white rounded-full flex items-center justify-center hover:bg-red-700 shadow-xl">
+        <i class="fa-solid fa-phone-slash text-base"></i>
+      </button>
+      <button onclick="toggleVideoMute()" id="btnMuteVideo" class="w-11 h-11 bg-gray-700 text-white rounded-full flex items-center justify-center">
+        <i class="fa-solid fa-video text-sm"></i>
+      </button>
+    </div>
+  </div>
+
+  <!-- ================= 5. PROFILE EDIT MODAL ================= -->
+  <div id="profileModal" class="hidden fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl w-full max-w-sm p-5 shadow-2xl space-y-3.5">
+      <div class="flex justify-between items-center border-b pb-2">
+        <h3 class="font-bold text-gray-800 text-sm">প্রোফাইল সেটিংস</h3>
+        <button onclick="closeProfileModal()" class="text-gray-400 hover:text-gray-600"><i class="fa-solid fa-xmark text-base"></i></button>
+      </div>
+      <div class="flex flex-col items-center">
+        <img id="editAvatarPreview" src="" class="w-18 h-18 w-20 h-20 rounded-full object-cover border-2 border-blue-500 mb-2 shadow">
+        <label class="cursor-pointer text-xs font-bold text-blue-600 bg-blue-50 px-3 py-1.5 rounded-full hover:bg-blue-100">
+          ছবি পরিবর্তন
+          <input type="file" id="profilePicInput" accept="image/*" class="hidden" onchange="handleProfilePicSelect(this)">
+        </label>
+      </div>
+      <div>
+        <label class="block text-[10px] font-bold text-gray-600 uppercase mb-0.5">First Name</label>
+        <input type="text" id="editFirstName" class="w-full p-2 border rounded-lg text-xs outline-none">
+      </div>
+      <div>
+        <label class="block text-[10px] font-bold text-gray-600 uppercase mb-0.5">Last Name</label>
+        <input type="text" id="editLastName" class="w-full p-2 border rounded-lg text-xs outline-none">
+      </div>
+      <div>
+        <label class="block text-[10px] font-bold text-gray-600 uppercase mb-0.5">Unique Username (@username)</label>
+        <input type="text" id="editUsername" class="w-full p-2 border rounded-lg text-xs outline-none focus:ring-1 focus:ring-blue-500">
+      </div>
+      <button onclick="saveProfileChanges()" id="saveProfileBtn" class="w-full py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg text-xs transition">সেভ করুন</button>
+    </div>
+  </div>
+
+  <!-- ================= 6. JAVASCRIPT LOGIC ================= -->
+  <script>
+    // --- FIREBASE INITIALIZATION ---
+    const firebaseConfig = {
+      apiKey: "AIzaSyCoraplSvTACc7bINtp5iwf9CcqTY9UJsQ",
+      authDomain: "sasta-anime.firebaseapp.com",
+      databaseURL: "https://sasta-anime-default-rtdb.firebaseio.com",
+      projectId: "sasta-anime",
+      storageBucket: "sasta-anime.firebasestorage.app",
+      messagingSenderId: "1059740793289",
+      appId: "1:1059740793289:web:fab43d610b0ce8d05a9018"
+    };
+
+    if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
+    const db = firebase.database();
+    const auth = firebase.auth();
+
+    auth.signInAnonymously().catch(err => console.log("Auth:", err));
+
+    let currentUser = JSON.parse(sessionStorage.getItem('AUTH_USER')) || null;
+    let currentChatPartner = null;
+    let activeChatListenerRef = null;
+    let tempProfilePicBase64 = null;
+    let cachedUsersList = [];
+
+    // WebRTC Multi-STUN Configuration
+    let peerConnection = null;
+    let localStream = null;
+    let currentCallData = null;
+    const rtcConfig = {
+      iceServers: [
+        { urls: 'stun:stun.l.google.com:19302' },
+        { urls: 'stun:stun1.l.google.com:19302' },
+        { urls: 'stun:stun2.l.google.com:19302' },
+        { urls: 'stun:stun.services.mozilla.com' }
+      ]
+    };
+
+    // Synthesized Tone
+    let audioCtx = null;
+    let ringInterval = null;
+
+    function startRingtone() {
+      try {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        ringInterval = setInterval(() => {
+          if (!audioCtx) return;
+          const osc = audioCtx.createOscillator();
+          const gain = audioCtx.createGain();
+          osc.type = 'sine';
+          osc.frequency.setValueAtTime(440, audioCtx.currentTime);
+          osc.frequency.setValueAtTime(480, audioCtx.currentTime + 0.1);
+          gain.gain.setValueAtTime(0.15, audioCtx.currentTime);
+          gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.8);
+          osc.connect(gain);
+          gain.connect(audioCtx.destination);
+          osc.start();
+          osc.stop(audioCtx.currentTime + 0.8);
+        }, 1500);
+      } catch (e) { console.log(e); }
+    }
+
+    function stopRingtone() {
+      if (ringInterval) clearInterval(ringInterval);
+      if (audioCtx) { audioCtx.close(); audioCtx = null; }
+    }
+
+    // Voice Recorder
+    let mediaRecorder = null;
+    let audioChunks = [];
+    let isRecording = false;
+
+    // Security: HTML Entity Sanitizer (Prevents XSS attacks)
+    function sanitize(str) {
+      if (!str) return '';
+      const div = document.createElement('div');
+      div.innerText = str;
+      return div.innerHTML;
+    }
+
+    // Simple Hash Scrambler for Passwords
+    function scramble(str) {
+      let hash = 0;
+      for (let i = 0; i < str.length; i++) {
+        hash = (hash << 5) - hash + str.charCodeAt(i);
+        hash |= 0;
+      }
+      return 's_' + Math.abs(hash);
+    }
+
+    const STICKER_DICTIONARY = {
+      'haha': '😂', 'lol': '🤣', 'love': '❤️', 'sad': '😢', 
+      'wow': '😮', 'hi': '👋', 'hello': '👋', 'congrats': '🎉',
+      'fire': '🔥', 'nice': '👍', 'kiss': '😘', 'angry': '😡'
+    };
+
+    window.addEventListener('DOMContentLoaded', () => {
+      if (currentUser) setupUserSession(currentUser);
+      else showAuth();
+    });
+
+    function backToUserList() {
+      document.getElementById('sidebarContainer').classList.remove('hidden');
+      document.getElementById('sidebarContainer').classList.add('flex');
+      document.getElementById('chatSection').classList.add('hidden');
+      document.getElementById('chatSection').classList.remove('flex');
+    }
+
+    /* ================= AUTHENTICATION ================= */
+    function setAuthTab(tab) {
+      const isLogin = tab === 'login';
+      document.getElementById('loginForm').classList.toggle('hidden', !isLogin);
+      document.getElementById('registerForm').classList.toggle('hidden', isLogin);
+      document.getElementById('tabBtnLogin').className = isLogin ? 'w-1/2 pb-3 text-blue-600 border-b-2 border-blue-600' : 'w-1/2 pb-3 text-gray-500';
+      document.getElementById('tabBtnRegister').className = !isLogin ? 'w-1/2 pb-3 text-blue-600 border-b-2 border-blue-600' : 'w-1/2 pb-3 text-gray-500';
+      hideAlert();
+    }
+
+    function showAlert(msg, isSuccess = false) {
+      const el = document.getElementById('authAlert');
+      el.innerText = msg;
+      el.className = `mb-3 p-2.5 rounded-lg text-xs font-medium ${isSuccess ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`;
+      el.classList.remove('hidden');
+    }
+    function hideAlert() { document.getElementById('authAlert').classList.add('hidden'); }
+
+    async function handleRegister() {
+      const fn = document.getElementById('regFirst').value.trim();
+      const ln = document.getElementById('regLast').value.trim();
+      const username = document.getElementById('regUser').value.trim().toLowerCase().replace(/[^a-z0-9_]/g, '');
+      const contact = document.getElementById('regContact').value.trim().toLowerCase();
+      const pass = document.getElementById('regPass').value;
+      const btn = document.getElementById('registerSubmitBtn');
+
+      if (!username) { showAlert("একটি সঠিক ইউজারনেম দিন (ইংরেজি অক্ষর ও সংখ্যা)!"); return; }
+      btn.innerText = 'যাচাই হচ্ছে...'; btn.disabled = true;
+
+      try {
+        const snap = await db.ref('users').once('value');
+        const usersData = snap.val() || {};
+
+        for (let key in usersData) {
+          if (usersData[key].username === username) {
+            showAlert("এই ইউজারনেমটি আগে থেকেই নেওয়া হয়েছে!");
+            btn.innerText = 'অ্যাকাউন্ট খুলুন'; btn.disabled = false; return;
+          }
+          if (usersData[key].contact === contact) {
+            showAlert("এই ফোন বা ইমেইল দিয়ে আগেই অ্যাকাউন্ট খোলা আছে!");
+            btn.innerText = 'অ্যাকাউন্ট খুলুন'; btn.disabled = false; return;
+          }
+        }
+
+        const uid = 'usr_' + Date.now();
+        const userObj = {
+          id: uid, firstName: fn, lastName: ln, username, contact,
+          password: scramble(pass),
+          profilePic: `https://api.dicebear.com/7.x/bottts/svg?seed=${username}`,
+          isOnline: true, friends: {}
+        };
+
+        await db.ref('users/' + uid).set(userObj);
+        setupUserSession(userObj);
+      } catch (err) { showAlert("ত্রুটি: " + err.message); }
+      finally { btn.innerText = 'অ্যাকাউন্ট খুলুন'; btn.disabled = false; }
+    }
+
+    async function handleLogin() {
+      const loginId = document.getElementById('loginId').value.trim().toLowerCase();
+      const pass = document.getElementById('loginPass').value;
+      const btn = document.getElementById('loginSubmitBtn');
+
+      btn.innerText = 'লগইন হচ্ছে...'; btn.disabled = true;
+
+      try {
+        const snap = await db.ref('users').once('value');
+        const users = snap.val() || {};
+        const hashed = scramble(pass);
+
+        let userMatch = null;
+        for (let key in users) {
+          if ((users[key].username === loginId || users[key].contact === loginId) && (users[key].password === hashed || users[key].password === pass)) {
+            userMatch = users[key]; break;
+          }
+        }
+
+        if (userMatch) setupUserSession(userMatch);
+        else showAlert("ভুল পাসওয়ার্ড অথবা ইউজারনেম দিয়েছেন!");
+      } catch (err) { showAlert("সার্ভার ত্রুটি: " + err.message); }
+      finally { btn.innerText = 'লগইন করুন'; btn.disabled = false; }
+    }
+
+    function setupUserSession(user) {
+      currentUser = user;
+      sessionStorage.setItem('AUTH_USER', JSON.stringify(user));
+
+      const statusRef = db.ref(`users/${user.id}/isOnline`);
+      db.ref('.info/connected').on('value', (snap) => {
+        if (snap.val() === true) {
+          statusRef.onDisconnect().set(false);
+          statusRef.set(true);
+        }
+      });
+
+      showApp();
+      listenForIncomingCalls();
+    }
+
+    function handleLogout() {
+      if (currentUser) db.ref(`users/${currentUser.id}/isOnline`).set(false);
+      sessionStorage.removeItem('AUTH_USER');
+      location.reload();
+    }
+
+    function showAuth() {
+      document.getElementById('authScreen').classList.remove('hidden');
+      document.getElementById('mainApp').classList.add('hidden');
+    }
+
+    function showApp() {
+      document.getElementById('authScreen').classList.add('hidden');
+      document.getElementById('mainApp').classList.remove('hidden');
+      document.getElementById('myDisplayName').innerText = `${currentUser.firstName} ${currentUser.lastName}`;
+      document.getElementById('myUsernameDisplay').innerText = `@${currentUser.username}`;
+      document.getElementById('myAvatarImg').src = currentUser.profilePic;
+
+      listenToAllUsers();
+      listenToFriendRequests();
+    }
+
+    /* ================= SIDEBAR & SEARCH ================= */
+    function showSidebarSection(sec) {
+      ['allUsers', 'friends', 'requests'].forEach(s => {
+        document.getElementById('list' + capitalize(s)).classList.toggle('hidden', s !== sec);
+        const nav = document.getElementById('nav' + capitalize(s));
+        nav.className = s === sec ? 'w-1/3 py-2.5 text-blue-600 border-b-2 border-blue-600' : 'w-1/3 py-2.5 hover:text-blue-600';
+      });
+    }
+
+    function listenToAllUsers() {
+      db.ref('users').on('value', (snapshot) => {
+        const users = snapshot.val() || {};
+        cachedUsersList = [];
+
+        if (users[currentUser.id]) {
+          currentUser = users[currentUser.id];
+          document.getElementById('myDisplayName').innerText = `${currentUser.firstName} ${currentUser.lastName}`;
+          document.getElementById('myUsernameDisplay').innerText = `@${currentUser.username}`;
+          document.getElementById('myAvatarImg').src = currentUser.profilePic;
+        }
+
+        for (let uid in users) {
+          if (uid !== currentUser.id) cachedUsersList.push(users[uid]);
+        }
+        renderUserLists(cachedUsersList);
+      });
+    }
+
+    function filterUsers(query) {
+      const q = query.trim().toLowerCase().replace('@', '');
+      document.getElementById('clearSearchBtn').classList.toggle('hidden', !q);
+      if (!q) { renderUserLists(cachedUsersList); return; }
+
+      const filtered = cachedUsersList.filter(u => 
+        (u.username && u.username.toLowerCase().includes(q)) || 
+        (u.firstName && u.firstName.toLowerCase().includes(q)) || 
+        (u.lastName && u.lastName.toLowerCase().includes(q))
+      );
+      renderUserLists(filtered);
+    }
+
+    function clearSearch() {
+      document.getElementById('userSearchInput').value = '';
+      document.getElementById('clearSearchBtn').classList.add('hidden');
+      renderUserLists(cachedUsersList);
+    }
+
+    function renderUserLists(users) {
+      const allContainer = document.getElementById('listAllUsers');
+      const friendsContainer = document.getElementById('listFriends');
+      let allHtml = '';
+      let friendsHtml = '';
+
+      const myFriends = currentUser.friends || {};
+
+      users.forEach(u => {
+        const isFriend = !!myFriends[u.id];
+        const row = `
+          <div onclick="selectChatPartner('${u.id}')" class="flex items-center justify-between p-2.5 hover:bg-gray-50 cursor-pointer transition">
+            <div class="flex items-center gap-2.5 min-w-0">
+              <div class="relative flex-shrink-0">
+                <img src="${u.profilePic}" class="w-10 h-10 rounded-full object-cover border">
+                <span class="absolute bottom-0 right-0 w-2.5 h-2.5 ${u.isOnline ? 'bg-green-500' : 'bg-gray-400'} border-2 border-white rounded-full"></span>
+              </div>
+              <div class="min-w-0">
+                <h4 class="font-bold text-gray-800 text-xs truncate">${sanitize(u.firstName)} ${sanitize(u.lastName)}</h4>
+                <p class="text-[10px] text-gray-400 truncate">@${sanitize(u.username)}</p>
+              </div>
+            </div>
+            <div class="flex-shrink-0">
+              ${!isFriend ? 
+                `<button onclick="event.stopPropagation(); sendFriendRequest('${u.id}')" class="text-[11px] bg-blue-50 text-blue-600 font-semibold px-2 py-0.5 rounded hover:bg-blue-100">+ Add</button>` : 
+                `<span class="text-[10px] text-green-600 font-bold bg-green-50 px-2 py-0.5 rounded">বন্ধু</span>`
+              }
+            </div>
+          </div>
+        `;
+        allHtml += row;
+        if (isFriend) friendsHtml += row;
+      });
+
+      allContainer.innerHTML = allHtml || `<p class="text-xs text-gray-400 p-4 text-center">কোনো ইউজার পাওয়া যায়নি</p>`;
+      friendsContainer.innerHTML = friendsHtml || `<p class="text-xs text-gray-400 p-4 text-center">কোনো বন্ধু নেই</p>`;
+    }
+
+    async function sendFriendRequest(receiverId) {
+      const reqRef = db.ref('friend_requests').push();
+      await reqRef.set({ id: reqRef.key, senderId: currentUser.id, receiverId, status: 'pending', timestamp: Date.now() });
+      alert("ফ্রেন্ড রিকোয়েস্ট পাঠানো হয়েছে!");
+    }
+
+    function listenToFriendRequests() {
+      db.ref('friend_requests').on('value', async (snapshot) => {
+        const reqs = snapshot.val() || {};
+        const container = document.getElementById('listRequests');
+        const badge = document.getElementById('requestCountBadge');
+
+        const pending = [];
+        for (let k in reqs) {
+          if (reqs[k].receiverId === currentUser.id && reqs[k].status === 'pending') pending.push(reqs[k]);
+        }
+
+        badge.innerText = pending.length;
+        badge.classList.toggle('hidden', pending.length === 0);
+
+        if (pending.length === 0) {
+          container.innerHTML = `<p class="text-xs text-gray-400 p-4 text-center">কোনো রিকোয়েস্ট নেই</p>`;
+          return;
+        }
+
+        const usersSnap = await db.ref('users').once('value');
+        const users = usersSnap.val() || {};
+
+        container.innerHTML = pending.map(r => {
+          const sender = users[r.senderId];
+          if (!sender) return '';
+          return `
+            <div class="flex items-center justify-between p-2.5 bg-white rounded-lg border shadow-sm my-1">
+              <div class="flex items-center gap-2 min-w-0">
+                <img src="${sender.profilePic}" class="w-8 h-8 rounded-full object-cover flex-shrink-0">
+                <div class="min-w-0">
+                  <h5 class="font-bold text-xs text-gray-800 truncate">${sanitize(sender.firstName)}</h5>
+                  <span class="text-[10px] text-gray-400 truncate">@${sanitize(sender.username)}</span>
+                </div>
+              </div>
+              <div class="flex gap-1 flex-shrink-0">
+                <button onclick="acceptFriendRequest('${r.id}', '${sender.id}')" class="bg-blue-600 text-white px-2 py-0.5 rounded text-xs">Accept</button>
+                <button onclick="db.ref('friend_requests/${r.id}').remove()" class="bg-gray-200 text-gray-700 px-2 py-0.5 rounded text-xs">Cancel</button>
+              </div>
+            </div>
+          `;
+        }).join('');
+      });
+    }
+
+    async function acceptFriendRequest(reqId, senderId) {
+      await db.ref(`friend_requests/${reqId}`).update({ status: 'accepted' });
+      await db.ref(`users/${currentUser.id}/friends/${senderId}`).set(true);
+      await db.ref(`users/${senderId}/friends/${currentUser.id}`).set(true);
+    }
+
+    /* ================= CHAT ENGINE ================= */
+    function getChatRoomId(u1, u2) { return u1 < u2 ? `${u1}_${u2}` : `${u2}_${u1}`; }
+
+    async function selectChatPartner(partnerId) {
+      const snap = await db.ref('users/' + partnerId).once('value');
+      currentChatPartner = snap.val();
+      if (!currentChatPartner) return;
+
+      if (window.innerWidth < 768) {
+        document.getElementById('sidebarContainer').classList.add('hidden');
+        document.getElementById('sidebarContainer').classList.remove('flex');
+        document.getElementById('chatSection').classList.remove('hidden');
+        document.getElementById('chatSection').classList.add('flex');
+      }
+
+      document.getElementById('noChatSelected').classList.add('hidden');
+      document.getElementById('chatActiveWindow').classList.remove('hidden');
+
+      document.getElementById('partnerAvatarImg').src = currentChatPartner.profilePic;
+      document.getElementById('partnerNameTitle').innerText = `${currentChatPartner.firstName} ${currentChatPartner.lastName}`;
+
+      const updateStatus = (isOnline) => {
+        document.getElementById('partnerStatusText').innerText = isOnline ? 'অনলাইন' : 'অফলাইন';
+        document.getElementById('partnerStatusText').className = isOnline ? 'text-[10px] text-green-600 font-bold' : 'text-[10px] text-gray-400 font-medium';
+        document.getElementById('partnerStatusDot').className = `absolute bottom-0 right-0 w-2.5 h-2.5 ${isOnline ? 'bg-green-500' : 'bg-gray-400'} border-2 border-white rounded-full`;
+      };
+      updateStatus(currentChatPartner.isOnline);
+
+      db.ref(`users/${partnerId}/isOnline`).on('value', (s) => updateStatus(s.val() === true));
+      listenToChatMessages();
+    }
+
+    function listenToChatMessages() {
+      if (activeChatListenerRef) activeChatListenerRef.off();
+
+      const roomId = getChatRoomId(currentUser.id, currentChatPartner.id);
+      activeChatListenerRef = db.ref(`chats/${roomId}`);
+
+      activeChatListenerRef.on('value', (snapshot) => {
+        const msgs = snapshot.val() || {};
+        const container = document.getElementById('messagesDisplay');
+        let html = '';
+
+        for (let msgId in msgs) {
+          const m = msgs[msgId];
+          const isMe = m.sender === currentUser.id;
+
+          if (!isMe && m.status !== 'seen') {
+            db.ref(`chats/${roomId}/${msgId}`).update({ status: 'seen' });
+          }
+
+          let checkmark = '';
+          if (isMe) {
+            if (m.status === 'seen') checkmark = `<span class="tick-blue ml-1">✓✓</span>`;
+            else if (m.status === 'delivered') checkmark = `<span class="tick-gray ml-1">✓✓</span>`;
+            else checkmark = `<span class="tick-gray ml-1">✓</span>`;
+          }
+
+          html += `
+            <div class="flex ${isMe ? 'justify-end' : 'justify-start'}">
+              <div class="max-w-[82%] sm:max-w-[70%] rounded-2xl px-3 py-1.5 text-xs sm:text-sm shadow-sm ${isMe ? 'bg-green-100 text-gray-800 rounded-tr-none' : 'bg-white text-gray-800 rounded-tl-none'}">
+                ${m.mediaUrl ? `<img src="${m.mediaUrl}" class="rounded-xl max-w-full mb-1 max-h-56 object-cover cursor-pointer" onclick="window.open('${m.mediaUrl}')" />` : ''}
+                ${m.audioUrl ? `<audio controls src="${m.audioUrl}" class="h-8 max-w-[200px] my-1"></audio>` : ''}
+                ${m.text ? `<p class="break-words leading-relaxed">${sanitize(m.text)}</p>` : ''}
+                <div class="flex items-center justify-end text-[9px] text-gray-400 mt-0.5">
+                  <span>${m.time}</span>
+                  ${checkmark}
+                </div>
+              </div>
+            </div>
+          `;
+        }
+
+        container.innerHTML = html;
+        container.scrollTop = container.scrollHeight;
+      });
+    }
+
+    async function sendTextMessage(customText = null) {
+      const input = document.getElementById('chatTextInput');
+      const text = customText || input.value.trim();
+      if (!text || !currentChatPartner) return;
+
+      const roomId = getChatRoomId(currentUser.id, currentChatPartner.id);
+      const timeNow = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+      const newMsgRef = db.ref(`chats/${roomId}`).push();
+      await newMsgRef.set({
+        id: newMsgRef.key, sender: currentUser.id, receiver: currentChatPartner.id, text,
+        time: timeNow, timestamp: Date.now(),
+        status: currentChatPartner.isOnline ? 'delivered' : 'sent'
+      });
+
+      if (!customText) input.value = '';
+      hideStickerPopup();
+      document.getElementById('emojiDrawer').classList.add('hidden');
+    }
+
+    /* ================= CAMERA & GALLERY COMPRESSOR ================= */
+    function handleMediaUpload(input) {
+      const file = input.files[0];
+      if (!file || !currentChatPartner) return;
+
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const img = new Image();
+        img.onload = async () => {
+          const canvas = document.createElement('canvas');
+          let w = img.width, h = img.height;
+          const maxDim = 800;
+          if (w > maxDim) { h = Math.round((h * maxDim) / w); w = maxDim; }
+          canvas.width = w; canvas.height = h;
+          canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+
+          const compressedBase64 = canvas.toDataURL('image/jpeg', 0.6);
+          const roomId = getChatRoomId(currentUser.id, currentChatPartner.id);
+          const timeNow = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+          const newMsgRef = db.ref(`chats/${roomId}`).push();
+          await newMsgRef.set({
+            id: newMsgRef.key, sender: currentUser.id, receiver: currentChatPartner.id,
+            mediaUrl: compressedBase64, time: timeNow, timestamp: Date.now(),
+            status: currentChatPartner.isOnline ? 'delivered' : 'sent'
+          });
+        };
+        img.src = e.target.result;
+      };
+      reader.readAsDataURL(file);
+      input.value = '';
+    }
+
+    /* ================= CROSS-PLATFORM VOICE RECORDER ================= */
+    async function toggleVoiceRecording() {
+      if (!currentChatPartner) return;
+      const btn = document.getElementById('voiceRecordBtn');
+      const status = document.getElementById('voiceRecordingStatus');
+
+      if (!isRecording) {
+        try {
+          if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+            throw new Error("HTTPS_OR_LOCALHOST_REQUIRED");
+          }
+
+          const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+          
+          let options = {};
+          if (MediaRecorder.isTypeSupported('audio/webm;codecs=opus')) {
+            options = { mimeType: 'audio/webm;codecs=opus' };
+          } else if (MediaRecorder.isTypeSupported('audio/mp4')) {
+            options = { mimeType: 'audio/mp4' };
+          }
+
+          mediaRecorder = new MediaRecorder(stream, options);
+          audioChunks = [];
+
+          mediaRecorder.ondataavailable = (e) => audioChunks.push(e.data);
+          mediaRecorder.onstop = async () => {
+            const blob = new Blob(audioChunks, { type: mediaRecorder.mimeType || 'audio/webm' });
+            const reader = new FileReader();
+            reader.onload = async (e) => {
+              const audioBase64 = e.target.result;
+              const roomId = getChatRoomId(currentUser.id, currentChatPartner.id);
+              const timeNow = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+              const newMsgRef = db.ref(`chats/${roomId}`).push();
+              await newMsgRef.set({
+                id: newMsgRef.key, sender: currentUser.id, receiver: currentChatPartner.id,
+                audioUrl: audioBase64, time: timeNow, timestamp: Date.now(),
+                status: currentChatPartner.isOnline ? 'delivered' : 'sent'
+              });
+            };
+            reader.readAsDataURL(blob);
+            stream.getTracks().forEach(track => track.stop());
+          };
+
+          mediaRecorder.start();
+          isRecording = true;
+          btn.classList.add('text-red-600');
+          status.classList.remove('hidden');
+        } catch (err) {
+          alert("মাইক্রোফোন এক্সেস এরর: ব্রাউজারে লক আইকনে ক্লিক করে মাইক পারমিশন Allow করে পেজ রিলোড দিন।");
+        }
+      } else {
+        mediaRecorder.stop();
+        isRecording = false;
+        btn.classList.remove('text-red-600');
+        status.classList.add('hidden');
+      }
+    }
+
+    /* ================= WEBRTC AUDIO/VIDEO CALLING ================= */
+    async function initiateCall(type) {
+      if (!currentChatPartner) return;
+
+      try {
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+          throw new Error("HTTPS_OR_LOCALHOST_REQUIRED");
+        }
+
+        localStream = await navigator.mediaDevices.getUserMedia({
+          video: type === 'video',
+          audio: true
+        });
+
+        document.getElementById('localVideo').srcObject = localStream;
+        document.getElementById('activeCallOverlay').classList.remove('hidden');
+        document.getElementById('callOverlayPartnerName').innerText = `${currentChatPartner.firstName} (${type === 'video' ? 'ভিডিও কল' : 'অডিও কল'})`;
+
+        peerConnection = new RTCPeerConnection(rtcConfig);
+        localStream.getTracks().forEach(track => peerConnection.addTrack(track, localStream));
+
+        peerConnection.ontrack = (event) => {
+          document.getElementById('remoteVideo').srcObject = event.streams[0];
+        };
+
+        const callRef = db.ref(`calls/${currentChatPartner.id}`);
+        peerConnection.onicecandidate = (event) => {
+          if (event.candidate) {
+            db.ref(`calls/${currentChatPartner.id}/callerCandidates`).push(event.candidate.toJSON());
+          }
+        };
+
+        const offer = await peerConnection.createOffer();
+        await peerConnection.setLocalDescription(offer);
+
+        await callRef.set({
+          callerId: currentUser.id,
+          callerName: `${currentUser.firstName} ${currentUser.lastName}`,
+          callerPic: currentUser.profilePic,
+          type,
+          offer: { type: offer.type, sdp: offer.sdp },
+          status: 'ringing'
+        });
+
+        callRef.on('value', async (snap) => {
+          const data = snap.val();
+          if (data && data.answer && !peerConnection.currentRemoteDescription) {
+            await peerConnection.setRemoteDescription(new RTCSessionDescription(data.answer));
+          }
+          if (!data || data.status === 'rejected' || data.status === 'ended') {
+            endActiveCall();
+          }
+        });
+
+        db.ref(`calls/${currentUser.id}/receiverCandidates`).on('child_added', (snap) => {
+          peerConnection.addIceCandidate(new RTCIceCandidate(snap.val()));
+        });
+
+      } catch (err) {
+        alert("ক্যামেরা/মাইক এরর: ব্রাউজারে মাইক ও ক্যামেরার পারমিশন নিশ্চিত করুন।");
+        endActiveCall();
+      }
+    }
+
+    function listenForIncomingCalls() {
+      db.ref(`calls/${currentUser.id}`).on('value', (snap) => {
+        const call = snap.val();
+        if (call && call.status === 'ringing') {
+          currentCallData = call;
+          document.getElementById('callerName').innerText = call.callerName;
+          document.getElementById('callerAvatar').src = call.callerPic;
+          document.getElementById('callTypeLabel').innerText = call.type === 'video' ? 'ভিডিও কল আসছে...' : 'অডিও কল আসছে...';
+          document.getElementById('incomingCallModal').classList.remove('hidden');
+          startRingtone();
+        } else {
+          document.getElementById('incomingCallModal').classList.add('hidden');
+          stopRingtone();
+        }
+      });
+    }
+
+    async function acceptIncomingCall() {
+      stopRingtone();
+      document.getElementById('incomingCallModal').classList.add('hidden');
+      if (!currentCallData) return;
+
+      try {
+        localStream = await navigator.mediaDevices.getUserMedia({
+          video: currentCallData.type === 'video',
+          audio: true
+        });
+
+        document.getElementById('localVideo').srcObject = localStream;
+        document.getElementById('activeCallOverlay').classList.remove('hidden');
+        document.getElementById('callOverlayPartnerName').innerText = currentCallData.callerName;
+
+        peerConnection = new RTCPeerConnection(rtcConfig);
+        localStream.getTracks().forEach(track => peerConnection.addTrack(track, localStream));
+
+        peerConnection.ontrack = (event) => {
+          document.getElementById('remoteVideo').srcObject = event.streams[0];
+        };
+
+        peerConnection.onicecandidate = (event) => {
+          if (event.candidate) {
+            db.ref(`calls/${currentCallData.callerId}/receiverCandidates`).push(event.candidate.toJSON());
+          }
+        };
+
+        await peerConnection.setRemoteDescription(new RTCSessionDescription(currentCallData.offer));
+        const answer = await peerConnection.createAnswer();
+        await peerConnection.setLocalDescription(answer);
+
+        await db.ref(`calls/${currentUser.id}`).update({
+          answer: { type: answer.type, sdp: answer.sdp },
+          status: 'connected'
+        });
+
+        db.ref(`calls/${currentUser.id}/callerCandidates`).on('child_added', (snap) => {
+          peerConnection.addIceCandidate(new RTCIceCandidate(snap.val()));
+        });
+
+      } catch (err) {
+        alert("কল রিসিভ ব্যর্থ: " + err.message);
+        rejectIncomingCall();
+      }
+    }
+
+    async function rejectIncomingCall() {
+      stopRingtone();
+      document.getElementById('incomingCallModal').classList.add('hidden');
+      await db.ref(`calls/${currentUser.id}`).remove();
+    }
+
+    function endActiveCall() {
+      stopRingtone();
+      if (localStream) { localStream.getTracks().forEach(t => t.stop()); localStream = null; }
+      if (peerConnection) { peerConnection.close(); peerConnection = null; }
+      document.getElementById('activeCallOverlay').classList.add('hidden');
+      if (currentChatPartner) db.ref(`calls/${currentChatPartner.id}`).remove();
+      db.ref(`calls/${currentUser.id}`).remove();
+    }
+
+    function toggleAudioMute() {
+      if (!localStream) return;
+      const track = localStream.getAudioTracks()[0];
+      if (track) { track.enabled = !track.enabled; document.getElementById('btnMuteAudio').classList.toggle('bg-red-600', !track.enabled); }
+    }
+
+    function toggleVideoMute() {
+      if (!localStream) return;
+      const track = localStream.getVideoTracks()[0];
+      if (track) { track.enabled = !track.enabled; document.getElementById('btnMuteVideo').classList.toggle('bg-red-600', !track.enabled); }
+    }
+
+    /* ================= STICKERS ================= */
+    function toggleEmojiDrawer() { document.getElementById('emojiDrawer').classList.toggle('hidden'); }
+
+    function handleTypingStickers(text) {
+      const words = text.toLowerCase().split(' ');
+      const lastWord = words[words.length - 1];
+      const popup = document.getElementById('stickerSuggestionPopup');
+      const holder = document.getElementById('stickerListHolder');
+
+      if (STICKER_DICTIONARY[lastWord]) {
+        const emoji = STICKER_DICTIONARY[lastWord];
+        holder.innerHTML = `<span onclick="sendTextMessage('${emoji}')" class="hover:scale-125 transition">${emoji}</span>`;
+        popup.classList.remove('hidden');
+      } else {
+        hideStickerPopup();
+      }
+    }
+    function hideStickerPopup() { document.getElementById('stickerSuggestionPopup').classList.add('hidden'); }
+
+    /* ================= PROFILE & UNIQUE USERNAME UPDATE ================= */
+    function openProfileModal() {
+      document.getElementById('editFirstName').value = currentUser.firstName;
+      document.getElementById('editLastName').value = currentUser.lastName;
+      document.getElementById('editUsername').value = currentUser.username;
+      document.getElementById('editAvatarPreview').src = currentUser.profilePic;
+      tempProfilePicBase64 = currentUser.profilePic;
+      document.getElementById('profileModal').classList.remove('hidden');
+    }
+    function closeProfileModal() { document.getElementById('profileModal').classList.add('hidden'); }
+
+    function handleProfilePicSelect(input) {
+      const file = input.files[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const img = new Image();
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          const maxDim = 200;
+          let w = img.width, h = img.height;
+          if (w > h) { if (w > maxDim) { h = Math.round((h * maxDim) / w); w = maxDim; } }
+          else { if (h > maxDim) { w = Math.round((w * maxDim) / h); h = maxDim; } }
+
+          canvas.width = w; canvas.height = h;
+          canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+
+          tempProfilePicBase64 = canvas.toDataURL('image/jpeg', 0.8);
+          document.getElementById('editAvatarPreview').src = tempProfilePicBase64;
+        };
+        img.src = e.target.result;
+      };
+      reader.readAsDataURL(file);
+    }
+
+    async function saveProfileChanges() {
+      const fn = document.getElementById('editFirstName').value.trim();
+      const ln = document.getElementById('editLastName').value.trim();
+      const newUsername = document.getElementById('editUsername').value.trim().toLowerCase().replace(/[^a-z0-9_]/g, '');
+      const pic = tempProfilePicBase64 || currentUser.profilePic;
+      const btn = document.getElementById('saveProfileBtn');
+
+      if (!newUsername) { alert("একটি সঠিক ইউজারনেম দিন!"); return; }
+      btn.innerText = 'যাচাই হচ্ছে...'; btn.disabled = true;
+
+      try {
+        // Check uniqueness if username changed
+        if (newUsername !== currentUser.username) {
+          const snap = await db.ref('users').once('value');
+          const users = snap.val() || {};
+          for (let uid in users) {
+            if (uid !== currentUser.id && users[uid].username === newUsername) {
+              alert("এই ইউজারনেমটি অন্য কেউ ইতিমধ্যে ব্যবহার করছে! অন্য নাম দিন।");
+              btn.innerText = 'সেভ করুন'; btn.disabled = false; return;
+            }
+          }
+        }
+
+        await db.ref(`users/${currentUser.id}`).update({
+          firstName: fn,
+          lastName: ln,
+          username: newUsername,
+          profilePic: pic
+        });
+
+        currentUser.firstName = fn;
+        currentUser.lastName = ln;
+        currentUser.username = newUsername;
+        currentUser.profilePic = pic;
+        sessionStorage.setItem('AUTH_USER', JSON.stringify(currentUser));
+
+        document.getElementById('myDisplayName').innerText = `${fn} ${ln}`;
+        document.getElementById('myUsernameDisplay').innerText = `@${newUsername}`;
+        document.getElementById('myAvatarImg').src = pic;
+
+        closeProfileModal();
+        alert("প্রোফাইল ও ইউজারনেম সফলভাবে আপডেট হয়েছে!");
+      } catch (err) { alert("ত্রুটি: " + err.message); }
+      finally { btn.innerText = 'সেভ করুন'; btn.disabled = false; }
+    }
+
+    function capitalize(str) { return str.charAt(0).toUpperCase() + str.slice(1); }
+  </script>
+</body>
+          </html>
